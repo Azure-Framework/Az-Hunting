@@ -69,6 +69,8 @@ end)
 
 
 local lastPaidAt = 0
+local pendingHarvests = {}
+local harvested = {}
 
 local function isAnimal(ent)
   if not DoesEntityExist(ent) then return false end
@@ -93,6 +95,30 @@ local function pedModelName(victim)
   return "a_c_deer"
 end
 
+local function allowedWeapon()
+  local _, weapon = GetCurrentPedWeapon(PlayerPedId(), true)
+  if not weapon or weapon == 0 then return false end
+  for name in pairs(Config.AllowedWeapons or {}) do
+    if weapon == joaat(name) then return true end
+  end
+  return false
+end
+
+local function addHarvest(victim)
+  if harvested[victim] or pendingHarvests[victim] then return end
+  local pedName = pedModelName(victim)
+  local img = (Config.Animals and Config.Animals[pedName]) or ("https://docs.fivem.net/peds/%s.webp"):format(pedName)
+  local tier, weight = makeSize()
+  pendingHarvests[victim] = {
+    pedName = pedName,
+    img = img,
+    tier = tier,
+    weight = weight,
+    expiresAt = GetGameTimer() + 180000
+  }
+  az_hunting_notify(("Animal down. Press G near the carcass to harvest %s meat."):format(tier:lower()))
+end
+
 AddEventHandler('gameEventTriggered', function(name, args)
   if name ~= "CEventNetworkEntityDamage" then return end
   local victim = args[1]
@@ -102,15 +128,50 @@ AddEventHandler('gameEventTriggered', function(name, args)
   if not DoesEntityExist(victim) then return end
   if not isAnimal(victim) then return end
   if not IsEntityDead(victim) then return end
+  if not allowedWeapon() then
+    az_hunting_notify("Use a proper hunting rifle to harvest clean meat.")
+    return
+  end
 
   local now = GetGameTimer()
   if now - lastPaidAt < (Config.CooldownMs or 2500) then return end
   lastPaidAt = now
 
-  local pedName = pedModelName(victim)
-  local img = (Config.Animals and Config.Animals[pedName]) or ("https://docs.fivem.net/peds/%s.webp"):format(pedName)
-  local tier, weight = makeSize()
-  TriggerServerEvent('az_hunting:reward', pedName, tier, weight, img)
+  addHarvest(victim)
+end)
+
+CreateThread(function()
+  while true do
+    local wait = 750
+    local ped = PlayerPedId()
+    local coords = GetEntityCoords(ped)
+
+    for ent, data in pairs(pendingHarvests) do
+      if data.expiresAt < GetGameTimer() or not DoesEntityExist(ent) then
+        pendingHarvests[ent] = nil
+      else
+        local dist = #(coords - GetEntityCoords(ent))
+        if dist < 8.0 then
+          wait = 0
+          DrawMarker(2, GetEntityCoords(ent).x, GetEntityCoords(ent).y, GetEntityCoords(ent).z + 0.7, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, .25, .25, .25, 47, 140, 255, 190, false, true, 2, false, nil, nil, false)
+          if dist <= (Config.HarvestDistance or 2.2) then
+            az_hunting_help("Press ~INPUT_DETONATE~ to harvest the animal")
+            if IsControlJustReleased(0, Config.ActionKey or 47) then
+              harvested[ent] = true
+              pendingHarvests[ent] = nil
+              az_hunting_doAction("Harvesting animal...", Config.HarvestDurationMs or 4500)
+              TriggerServerEvent('az_hunting:reward', data.pedName, data.tier, data.weight, data.img)
+              SetEntityAsMissionEntity(ent, true, true)
+              DeleteEntity(ent)
+              break
+            end
+          end
+        end
+      end
+    end
+
+    Wait(wait)
+  end
 end)
 
 RegisterNetEvent('az_hunting:popup', function(data)

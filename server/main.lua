@@ -26,6 +26,24 @@ local function payCash(src, amount)
   fw:addMoney(src, amount)
 end
 
+local rewardWindows = {}
+
+local function allowedAnimal(pedName)
+  pedName = tostring(pedName or ""):lower()
+  return Config.Animals and Config.Animals[pedName] ~= nil
+end
+
+local function rateLimited(src)
+  local now = os.time()
+  local state = rewardWindows[src]
+  if not state or now - state.startedAt >= 60 then
+    rewardWindows[src] = { startedAt = now, count = 1 }
+    return false
+  end
+  state.count = state.count + 1
+  return state.count > (Config.MaxHarvestsPerMinute or 8)
+end
+
 local function takeCash(src, amount, cb)
   amount = math.floor(tonumber(amount) or 0)
   if amount <= 0 then return cb and cb(true) end
@@ -39,9 +57,9 @@ local function takeCash(src, amount, cb)
   end)
 end
 
--- /quitjob (resign) support:
--- 1) tries framework setter if available
--- 2) falls back to DB update using oxmysql or MySQL wrapper
+
+
+
 local function getCharId(src)
   if not Config.UseAzFrameworkCharacter then return nil end
   local ok, c = pcall(function() return exports[Config.FrameworkResource]:GetPlayerCharacter(src) end)
@@ -148,19 +166,43 @@ RegisterNetEvent('az_hunting:reward', function(pedName, tier, weight, img)
   weight = tonumber(weight or 0) or 0
   img = tostring(img or "")
 
+  if Config.RequireHunterJob ~= false then
+    local okJob = ensureJob(src)
+    if not okJob then
+      TriggerClientEvent('az_hunting:notify', src, "You need the hunter job to sell harvested game.")
+      return
+    end
+  end
+
+  if not allowedAnimal(pedName) then
+    dbg(src, ("DENY invalid animal=%s"):format(pedName))
+    return
+  end
+
+  if rateLimited(src) then
+    dbg(src, "DENY harvest rate limit")
+    TriggerClientEvent('az_hunting:notify', src, "Slow down before processing more game.")
+    return
+  end
+
+  if weight < 5 or weight > 280 then
+    dbg(src, ("DENY invalid weight=%.2f"):format(weight))
+    return
+  end
+
   local base = math.random(Config.MinReward, Config.MaxReward)
   local multi = 1.0
   if tier == "Medium" then multi = 1.25 end
   if tier == "Large" then multi = 1.55 end
   local reward = math.floor(base * multi + (weight * 1.2))
 
-  exports[Config.FrameworkResource]:addMoney(src, reward)
+  payCash(src, reward)
 
   TriggerClientEvent('az_hunting:popup', src, {
     img = img,
-    title = ("Hunt Reward • %s"):format(pedName),
+    title = ("Hunt Reward - %s"):format(pedName),
     sub = ("You earned ~$%d"):format(reward),
-    meta = ("Size: %s  •  Weight: %.1flb"):format(tier, weight),
+    meta = ("Size: %s - Weight: %.1flb"):format(tier, weight),
     duration = 5200
   })
 end)

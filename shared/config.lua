@@ -1,10 +1,11 @@
 Config = Config or {}
 
 Config.FrameworkResource = Config.FrameworkResource or 'Az-Framework'
-Config.DebugJobChecks = Config.DebugJobChecks ~= false
+Config.DebugJobChecks = Config.DebugJobChecks == true
 Config.JobName = 'hunter'
+Config.RequireHunterJob = Config.RequireHunterJob ~= false
 
--- Job Center DB mapping (used for /quitjob if no framework setter is available)
+
 Config.DB = Config.DB or {
   table            = 'user_characters',
   identifierColumn = 'charid',
@@ -12,8 +13,8 @@ Config.DB = Config.DB or {
 }
 Config.UseAzFrameworkCharacter = (Config.UseAzFrameworkCharacter ~= false)
 
--- Uses Az-Framework export you provided:
--- exports['Az-Framework']:getPlayerJob(source)
+
+
 Config.GetPlayerJob = Config.GetPlayerJob or function(source)
     local ok, job = pcall(function()
         return exports[Config.FrameworkResource]:getPlayerJob(source)
@@ -30,14 +31,27 @@ Config.GetPlayerJob = Config.GetPlayerJob or function(source)
     return 'civ'
 end
 
-Config.InteractKey = Config.InteractKey or 38 -- E
-Config.ActionKey   = Config.ActionKey or 47 -- G
+Config.InteractKey = Config.InteractKey or 38 
+Config.ActionKey   = Config.ActionKey or 47 
 
 
 
-Config.CooldownMs = 2500
+Config.CooldownMs = 9000
 Config.MinReward = 80
 Config.MaxReward = 240
+Config.HarvestDistance = 2.2
+Config.HarvestDurationMs = 4500
+Config.MaxHarvestsPerMinute = 8
+Config.AllowedWeapons = {
+  weapon_musket = true,
+  weapon_sniperrifle = true,
+  weapon_heavysniper = true,
+  weapon_heavysniper_mk2 = true,
+  weapon_marksmanrifle = true,
+  weapon_marksmanrifle_mk2 = true,
+  weapon_carbinerifle = true,
+  weapon_carbinerifle_mk2 = true
+}
 Config.Animals = {
   a_c_boar = 'https://docs.fivem.net/peds/a_c_boar.webp',
   a_c_deer = 'https://docs.fivem.net/peds/a_c_deer.webp',

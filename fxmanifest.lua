@@ -2,7 +2,7 @@ fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
 
-author 'Azure(TheStoicBear)'
+author 'Azure Dev'
 description 'Az Jobs Split (Az-Framework)'
 version '3.0.0'
 
